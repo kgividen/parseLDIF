@@ -1,4 +1,7 @@
 {
-  "name" : "parseLDIF",
-  "main" : "./parseLDIF.js"
+  "name": "parseLDIF",
+  "main": "./parseLDIF.js",
+  "dependencies": {
+    "underscore": "^1.8.3"
+  }
 }

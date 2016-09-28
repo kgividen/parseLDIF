@@ -1,3 +1,6 @@
+var fs = require('fs');
+var _ = require('underscore');
+var userIds = require("./AmerUserIDS.json");
 // Compatibility shims
 if (!String.prototype.trim) {
   String.prototype.trim = function () {
@@ -178,14 +181,19 @@ sn, st, street, telephoneNumber, title
 
 // RFC 2849 uses givenname, RFC 4519 uses givenName, we rather support
 // both
-const usefulFields = ["birthyear", "birthmonth", "birthday", "c", "cn",
-    "description", "facsimiletelephonenumber", "givenName", "homePhone", "l",
-    "mail", "mobile", "mozillaHomeCountryName", "mozillaHomeLocalityName",
-    "mozillaHomePostalCode", "mozillaHomeState", "mozillaHomeStreet",
-    "mozillaHomeUrl", "mozillaNickname", "mozillaSecondEmail",
-    "mozillaWorkStreet2", "mozillaWorkUrl", "o", "ou", "postalCode", "sn",
-    "st", "street", "telephoneNumber", "title", "objectclass", "givenname"
-    ];
+// const usefulFields = ["birthyear", "birthmonth", "birthday", "c", "cn",
+//     "description", "facsimiletelephonenumber", "givenName", "homePhone", "l",
+//     "mail", "mobile", "mozillaHomeCountryName", "mozillaHomeLocalityName",
+//     "mozillaHomePostalCode", "mozillaHomeState", "mozillaHomeStreet",
+//     "mozillaHomeUrl", "mozillaNickname", "mozillaSecondEmail",
+//     "mozillaWorkStreet2", "mozillaWorkUrl", "o", "ou", "postalCode", "sn",
+//     "st", "street", "telephoneNumber", "title", "objectclass", "givenname"
+//     ];
+
+const usefulFields = ["dn","cn","givenName", "mail","L",
+  "postalCode","postOfficeBox","st","street","sn","telephoneNumber",
+  "title","WebidSynchID","webidAddress2","webidCountryCode","webidUserEnteredCompany"
+];
 
 function debug(str) {
   if (debugState) {
@@ -247,7 +255,7 @@ function parseLDIF(inStr) {
     value = null;
   }
 
-  record.add = handleAdding;
+  record.add = handleAdding; //This gets all the attrs and adds them to the record
 
   inStr.forEach(function (line) {
       if (line != undefined) {
@@ -258,13 +266,7 @@ function parseLDIF(inStr) {
           if (Object.keys(record).length > 1) {
             record.add(key, value);
             delete record.add;
-
-            if (record.objectclass &&
-              (record.objectclass === "person" ||
-               record.objectclass.indexOf("person") !== -1)) {
-                delete record.objectclass;
-                out_records.push(record);
-            }
+            out_records.push(record);
           }
           record = {};
           record.add = handleAdding;
@@ -277,6 +279,7 @@ function parseLDIF(inStr) {
             return ;
           }
           else {
+            //This is being used to find the colon indext of the attrs.
             colon_idx = line.indexOf(":");
             line = line.trim();
 
@@ -313,7 +316,44 @@ if (typeof(exports) !== "undefined") {
   exports.parseLDIF = parseLDIF;
 }
 
-if ((typeof(arguments) !== "undefined") && arguments.length == 1) {
-  var lines = readFile(arguments[0]).replace(/\r\n/g,"\n");
-  print(parseLDIF(lines.split("\n")).toSource());
-}
+// var wantedObjects = ["cn=pcook,ou=AMER,o=Customers", "cn=sehjah,ou=AMER,o=Customers"];
+
+var wantedObjects = [];
+//add the ldap junk to the uids
+userIds.forEach(function(id){
+  var newId = "cn=" + id + ",ou=AMER,o=Customers";
+  wantedObjects.push(newId);
+});
+
+
+// fs.readFile('/Users/kgividen/Desktop/joe/smallSample.ldif', 'utf8', function (err,data) {
+fs.readFile('/Users/kgividen/Desktop/joe/PartnerBackupAMER.ldif', 'utf8', function (err,data) {
+  if (err) {
+    return console.log(err);
+  }
+  data = data.replace(/\r\n/g,"\n");
+  var parsedLDIF = parseLDIF(data.split("\n"));
+
+  var wantedLDIFArray = _.filter(parsedLDIF, function(item){
+      return _.contains(wantedObjects,item.dn);
+  });
+
+  var newLDIF  = "";
+  wantedLDIFArray.forEach(function(item){
+    _.each(item, function(attr, key){
+      //Add each of the attributes to the ldif file
+      newLDIF=newLDIF + key + ":" + attr + "\n";
+      console.log(attr);
+    });
+    newLDIF = newLDIF + "\n"; //add a blank line between objs.
+    console.log(item);
+  });
+
+  console.log(newLDIF);
+  fs.writeFile("/Users/kgividen/Desktop/joe/newLDIFFile.ldif", newLDIF, function(err) {
+    if(err) {
+      return console.log(err);
+    }
+    console.log("New LDIF is called newLDIFFile.ldif");
+  });
+});
